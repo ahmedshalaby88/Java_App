@@ -1,0 +1,36 @@
+properties([
+    disableConcurrentBuilds(),
+    disableResume(),
+    parameters([string(defaultValue: '${BUILD_NUMBER}', name: 'IMAGE_NUM')])
+])
+
+node("agent-0"){
+    def maven = tool name: 'mvn-3-5-4', type: 'maven'
+
+    stage("Checkout SCM"){
+        checkout scmGit(branches: [[name: '*/master']], extensions: [], userRemoteConfigs: [[url: 'https://github.com/Hassan-Eid-Hassan/java.git']])
+    }
+
+    stage("Build App"){
+        env.PATH = "${maven}/bin:${env.PATH}"
+        sh "mvn package install"
+    }
+    stage("Archive Jar"){
+        archiveArtifacts artifacts: 'target/*.jar', followSymlinks: false
+    }
+    stage("Build Docker Image"){
+        sh "docker build -t hassaneid/data-iti:v${IMAGE_NUM} ."
+    }
+    stage("Docker Login"){
+        withCredentials([string(credentialsId: 'docker-username', variable: 'DOCKER_USER'), string(credentialsId: 'docker-password', variable: 'DOCKER_PASS')]) {
+            sh "docker login -u ${DOCKER_USER} -p ${DOCKER_PASS}"
+        }
+    }
+    // stage("Docker push"){
+    //         sh "docker push hassaneid/data-iti:v${IMAGE_NUM}"
+    //     }
+    // stage("Docker deploy"){
+    //     sh "docker stop java-app && docker rm java-app"
+    //     sh "docker run -d -p 8090:8090 --name java-app hassaneid/data-iti:v${IMAGE_NUM}"
+    // }
+}
