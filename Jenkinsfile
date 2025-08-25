@@ -1,63 +1,46 @@
-@Library('data-lib')_
-
-pipeline{
-    
-    agent{
-        label "agent-0"
-    }
+pipeline {
+    agent any
 
     tools {
-      maven 'mvn-3-5-4'
+        maven 'mvn-3-5-4'
     }
 
     environment {
-        DOCKER_USER = credentials("docker-username")
-        DOCKER_PASS = credentials("docker-password")
+        IMAGE_TAG = "v${BUILD_NUMBER}"
+        GITHUB_CRED = credentials("github")
+        DOCKER_CRED = credentials("docker")
     }
 
-    stages{
-        stage("Build App"){
-            steps{
-                script{
-                    def maven = new ed.iti.mvn()
-                    maven.build("package install")
-                }
+    stages {
+
+        stage('Checkout') {
+            steps {
+                git branch: 'main',
+                    url: 'https://github.com/ahmedshalaby88/Java_App.git',
+                    credentialsId: 'github'
             }
         }
-        // stage("Test App"){
-        //     steps{
-        //         script{
-        //             def maven = new ed.iti.mvn()
-        //             maven.test(Nu)
-        //         }
-        //     }
-        // }
-        stage("Archive Jar"){
-            steps{
-                archiveArtifacts artifacts: 'target/*.jar', followSymlinks: false
+
+        stage('Build & Test') {
+            steps {
+                sh "mvn clean package -DskipTests"
+                sh "mvn test"
             }
         }
-        stage("Build Docker Image"){
-            steps{
-                script{
-                    def dockeriti = new org.iti.docker()
-                    dockeriti.build("hassaneid/data-iti", "v${IMAGE_NUM}")
-                }
+
+        stage('Archive Artifact') {
+            steps {
+                archiveArtifacts artifacts: 'target/*.jar'
             }
         }
-        stage("Docker Login"){
-            steps{
-                script{
-                    def dockeriti = new org.iti.docker()
-                    dockeriti.login("${DOCKER_USER}", "${DOCKER_PASS}")
-                }
-            }
-        }
-        stage("Docker push"){
-            steps{
-                script{
-                    def dockeriti = new org.iti.docker()
-                    dockeriti.push("hassaneid/data-iti", "v${IMAGE_NUM}")
+
+        stage('Docker Build & Push') {
+            steps {
+                script {
+                    docker.withRegistry('', 'docker') {
+                        def image = docker.build("ahmedshalaby88/task2_cicd:${IMAGE_TAG}")
+                        image.push()
+                    }
                 }
             }
         }
@@ -68,11 +51,10 @@ pipeline{
             cleanWs()
         }
         success {
-            echo "success"
+            echo "✅ Build and Docker push completed successfully!"
         }
         failure {
-            echo "failure"
+            echo "❌ Build or Docker push failed!"
         }
     }
-
 }
